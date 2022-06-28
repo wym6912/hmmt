@@ -1,0 +1,240 @@
+.TH "hmmt" l "March 1995" "HMMER 1.8" hmmt 
+
+.SH NAME
+.TP
+.I hmmt 
+- hidden Markov model training for biological sequences
+.SH SYNOPSIS
+.B hmmt [options] hmmfile seqfile
+.SH DESCRIPTION
+.I hmmt
+attempts to learn the pattern shared by the multiple sequences in
+.I seqfile,
+and saves a description of the pattern in
+.I hmmfile.
+.PP
+.I seqfile 
+may contain RNA, DNA, or amino acid sequences (don't mix them, though). 
+It may be in any one of several different common sequence file formats,
+including EMBL, Genbank, and FASTA. The easiest to type in yourself
+is FASTA format, which consists of a line starting with > containing
+the name (one word) and an optional description of the sequence,
+followed by one or more lines of sequence.
+.PP
+The output file is not meant to be directly examined by the user; it
+is used as input to other hidden Markov modeling programs that do
+multiple sequence alignment 
+.I [hmma]
+and database searching
+.I [hmmfs, hmmls, hmms, hmmsw].
+.PP 
+.I hmmt
+works by iteratively improving a new multiple sequence alignment calculated
+using the model, then a new model given that alignment.
+A simulated annealing protocol is used to avoid bad local minima in
+the iterative (expectation maximization) training procedure.
+.PP
+"Simulated annealing" is a well-known method for avoiding obvious
+local minima in an optimization problem. 
+.I hmmt
+uses a theoretically rigorous method to sample suboptimal alignments
+according to a "temperature" factor measured in units of the Boltzmann
+factor k; the higher the temperature,
+the more random the alignment. A temperature factor of 1.0 is
+equivalent to sampling alignments exactly according to their
+probability. The default parameters of simulated annealing
+work well. If you are unhappy with them, though, you can set
+a starting temperature with the 
+.I -k
+option; 5 to 10 is a good choice (default is 5). You may also set a ramp
+factor
+.I -r 
+; by default, this is set to 0.95, which means the temperature
+will be decreased to 95% of its current value at each iteration.
+.PP
+Besides simulated annealing, two other training algorithms are available.
+-v toggles standard Viterbi
+approximation to Baum-Welch expectation maximization. As a training
+algorithm, it is fast, but prone to serious local minimum problems
+(it makes bad models unless you've provided a good starting hint
+at the alignment). -B toggles full Baum-Welch expectation maximization. 
+Full Baum-Welch is slow and usually not quite as good as simulated
+annealing.
+.PP
+By default, the starting model is a model with uniform state transition
+and symbol emission probabilities, with length equal to the average
+length of the sequences in
+.I seqfile.
+A different starting model may be provided as a hint, using the
+-i option. A common procedure would be to build a hint HMM from
+an alignment of a small number of sequences, then give that model
+with -i to hmmt for training on a larger number of sequences.
+Important: simulated annealing works by initially "melting" the
+starting alignment, so providing a hint to simulated annealing
+has no effect. -i is only useful for -v or -B training, or
+perhaps if the initial temperature of simulated annealing is
+reduced (see the -k option).
+.PP
+Another training option is "constrained simulated annealing".
+If you know the structure of some of your training sequences,
+you can construct a structural alignment of them and keep
+the rest of the homologues in a separate file. Using the -a
+option, hmmt can combine both a known multiple alignment and a set
+of unaligned homologues into a single training set. The
+alignment will remain fixed throughout the training process,
+while the homologues are aligned to it. The -o option should
+be used to save the final alignment if you desire.
+.SH OPTIONS
+.TP
+-a <alignfile>    
+Include the multiple alignment in
+.I alignfile
+, which must be in SELEX or GCG MSF alignment format,
+into the training set. This alignment is not allowed to
+change during training. The sequences in the alignment
+are in addition to the unaligned training set; you must
+remove duplicate
+sequences between the two files before hand.
+.TP
+-h
+Print out short help and usage info.
+.TP
+-i <hmmfile>
+Use the HMM in <hmmfile> as the starting model, instead
+of the default "flat" starting model.
+.TP
+-k <temperature kT> 
+Set the starting temperature for a simulated annealing run. Good values
+are between 5 and 10. 
+.I kT 
+must be >= 0. 
+.TP
+-l <length>
+If a uniform starting model is to be used (the default),
+set its initial length to <length>. Setting this also
+disables the ability of the program to learn an optimum
+length as it iterates.
+.TP
+-p <priorfile>
+Use the prior probability distributions in <priorfile>, instead of
+the defaults. The defaults are almost identical to those given in
+the original Krogh et al. HMM paper. Example files that illustrate
+the correct prior file format are provided in the distribution for
+the default nucleic acid prior
+.I (Demos/Nucleic.pri)
+and the default amino acid prior
+.I (Demos/Simple.pri).
+The files are commented and should be self-documenting.
+More complicated (and experimental) priors based on mixture
+Dirichlets 
+and Dirichlet mixtures in combination with a softmax neural net
+taking input from X-ray crystal structure data for a subset
+of sequences in the alignment are given in
+.I (Demos/BrownHaussler.pri)
+and
+.I (Demos/Structure.pri),
+respectively.
+.TP
+-r <ramp>
+Set ramp multiplier for a simulated annealing run. Default is 0.9.
+.I ramp
+must be > 0 and < 1.
+At each iteration of the run, 
+.I kT
+(the metaphorical temperature of the system)
+is multiplied by
+.I ramp.
+.TP
+-s <seed> 
+Set the random number generator seed to <seed>. Possibly useful
+for reproducing previous results.
+.I hmmt 
+always prints what
+it used for a seed.
+.TP 
+-v
+Disables simulated annealing and activates the Viterbi approximation to
+Baum-Welch instead. Fast, but tends to get stuck in spurious
+local optima. Useful with -a or -i.
+.TP
+-A <archprior>
+Sets a factor which somewhat arbitrarily 
+limits the length of models. archprior is
+a number from 0 to 1. By default, it is 0.85 and the prior probability
+of a model of length L is proportional to 0.85^L. For shorter
+models, reduce archprior. For true maximum likelihood model
+architectures with no fiddling with model length, set -A 1.0.
+The reason for this factor is that unfiddled maximum likelihood model
+architectures tend to overcall match columns relative to insert
+columns compared to one's biological intuition; the excess
+model length also impacts computation times negatively.
+.TP
+-B
+Disables simulated annealing and activates full Baum-Welch
+expectation maximization instead. Slow, but almost as good
+as simulated annealing at finding good models. Useful with
+-a or -i.
+.TP
+-P <PAMfile>
+(Experimental) Use the scoring matrix in <PAMfile> as a source of
+prior symbol emission information. This results in behavior that
+is similar to the behavior of sequence "profiles" (Gribskov et al.,
+Meth. Enzymol. 183:146-159, 1990) when there are only a few sequences
+in the alignment. Because the default behavior of 
+.I hmmt
+is to use a very simple prior, with no information about the chemical
+similarities of amino acids, we believe the 
+.I -P 
+option, or a more theoretically grounded version of it,
+ will eventually prove superior.
+
+The PAM file may be either a BLOSUM matrix (Henikoff and Henikoff, PNAS
+89:10915-10919, 1992) or a PAM matrix produced by the NCBI "pam" program
+that comes with BLAST (Altschul et al., JMB 215:403-410 1990). Other matrices
+may be used if they conform to one of these formats.
+.TP
+-S <SA schedule file> 
+The default simulated annealing schedule is a
+simple exponential cooling. It is somewhat slow and unlikely to be the
+best that could be used.  You can provide a customized annealing
+schedule. This file contains one line per SA iteration, containing a
+single number which is read as the kT (temperature) for this
+iteration.  An example SA schedule is in the file Demos/saschedule.dat.
+.TP
+-W 
+Weight the sequences by the Gerstein/Sonnhammer heuristic rule
+at each training iteration, using the current alignment. This
+option is not recommended. It does not seem to help. It will
+be superceded by better weighting procedures in the future.
+.SH SEE ALSO
+.PP
+Overview: hmmer(l)
+.PP
+Individual man pages: hmma(l), hmmb(l), hmme(l), hmmfs(l), hmmls(l), hmms(l), 
+hmmsw(l), hmm_convert(l)
+.PP
+User guide and tutorial: Userguide.ps
+
+.SH BUGS
+No major bugs known.
+
+Not very tolerant of errors on the command line.
+
+.SH NOTES
+
+This software and documentation is Copyright (C) 1992-1995, Sean R. Eddy.
+It is freely distributable under terms of the GNU General Public
+License. See COPYING, in the source code distribution, for more
+details, or contact me.
+
+.nf
+Sean Eddy
+Dept. of Genetics, Washington Univ. School of Medicine
+660 S. Euclid Box 8232
+St Louis, MO 63110 USA
+Phone: 1-314-362-7666
+FAX  : 1-314-362-2985
+Email: eddy@genetics.wustl.edu
+.fi
+
+
