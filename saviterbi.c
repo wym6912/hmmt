@@ -90,6 +90,8 @@
  * (the same traceback function ViterbiFill-generated matrices would call)
  * to extract a state path.
  *
+ * Using openmp to speed up the program
+ *
  * Returns 1 on success, 0 on failure.
  */
 int
@@ -203,7 +205,6 @@ SaFill(struct sa_hmm_s *sahmm,    /* model, in simulated annealing form  */
 	  if (thisrow[k].score_i > scalefactor[i])  scalefactor[i] = thisrow[k].score_i;
 	}
       scalefactor[i] = 1.0 / scalefactor[i];
-      
       for (k = 0; k <= sahmm->M; k++)
 	{
 	  thisrow[k].score_m *= scalefactor[i];
@@ -444,6 +445,7 @@ DumpSaMatrix(struct sa_s **mx,          /* the matrix       */
  *       
  * Returns:  pointer to allocated sa_hmm structure, or NULL on failure.
  *           Caller is responsible for free'ing the space.
+ * Modified: Use openmp library to speed up this process
  */          
 struct sa_hmm_s *
 CreateSahmm(struct hmm_struc *hmm, float kT)
@@ -460,7 +462,6 @@ CreateSahmm(struct hmm_struc *hmm, float kT)
   sahmm->mat = (struct sa_state_s *) malloc (sizeof(struct sa_state_s) * (hmm->M + 2));
   if (sahmm->ins == NULL || sahmm->del == NULL || sahmm->mat == NULL) return NULL;
 
-  
   for (k = 0; k <= hmm->M; k++)
     {
 				/* state transitions */
@@ -485,7 +486,6 @@ CreateSahmm(struct hmm_struc *hmm, float kT)
 	}
 
     }
-
   return sahmm;
 }
 

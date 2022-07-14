@@ -206,7 +206,7 @@ TraceCount(struct hmm_struc *hmm, char *seq, float wt, struct trace_s *tr)
  *           seq       - sequence 0..len-1
  *           tr        - traceback that aligns seq to hmm
  *           ret_score - RETURN: the score of that alignment
- *           
+ * Modified: Use openmp library to speed up this process
  * Return:   1 on success, 0 on failure.          
  */
 int

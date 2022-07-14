@@ -103,7 +103,7 @@ MallocOrDie(size_t size)
 {
   void *ptr;
   if ((ptr = malloc (size)) == NULL)
-    Die("malloc failed");
+    Die("malloc failed on allocing size = %d", size);
   return ptr;
 }
 
@@ -112,6 +112,6 @@ ReallocOrDie(void *p, size_t size)
 {
   void *ptr;
   if ((ptr = realloc(p, size)) == NULL)
-    Die("realloc failed");
+    Die("realloc failed on reallocing size = %d", size);
   return ptr;
 }

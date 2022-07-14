@@ -25,11 +25,16 @@
 #include <signal.h>
 #include <limits.h>
 #include <float.h>
+#include <unistd.h>
 
 #ifdef NEED_GETOPTH
 #include <getopt.h>
 #endif
 
+// # define PERFDEBUG 1
+# ifdef PERFDEBUG
+# include <gperftools/profiler.h>
+# endif
 
 #include "states.h"
 #include "externs.h" 
@@ -47,7 +52,7 @@ int  Alphabet_type;		/* kDNA, kRNA, or kAmino    */
 static int killnow;		/* flag for SIGINT catching */
 static void handle_interrupt(int sig);
 
-#define OPTIONS "a:hi:k:l:o:p:r:s:vA:BP:S:W"
+#define OPTIONS "a:hi:k:l:o:p:r:s:vA:BP:S:W:t:"
 
 static char usage[]  = "\
 Usage: hmmt [-options] <hmmfile output> <seqfile in>\n\
@@ -67,7 +72,8 @@ where options are:\n\
    -B                : use full Baum-Welch EM training (default: sim annealing)\n\
    -P <pam>          : use PAM-based ad hoc prior, using matrix in <pam>\n\
    -S <schedulefile> : read simulated annealing schedule from <file>\n\
-   -W                : re-weight by the Sonnhammer rule at each iteration\n";
+   -W                : re-weight by the Sonnhammer rule at each iteration\n\
+   -t <number>       : The number of threads to process\n";
 
 static char banner[] = "hmmt: hidden Markov model training";
 
@@ -78,7 +84,10 @@ static int    read_kT(FILE *schedfp, float *ret_kT);
 
 int
 main(int argc, char **argv)
-{ 
+{
+# if PERFDEBUG
+  ProfilerStart("hmmt.prof");
+# endif
   char   *seqfile;		/* unaligned sequence file                     */
   char  **seqs;			/* training sequences                          */
   char  **seqs1;		/* 1..seqlen sequences, prepped for alignment  */
@@ -127,6 +136,7 @@ main(int argc, char **argv)
   int    weighted;		/* TRUE to do weight compensation during training*/
   char  *pamfile;		/* name of PAM file to read for PAM-based prior  */
   float  pamwt;			/* weight on PAM-based prior                     */
+  int    threads;			/* The number of threads                       */
 
   int          optc;
   extern char *optarg;          /* for getopt() */
@@ -155,6 +165,7 @@ main(int argc, char **argv)
   killnow             = FALSE;	/* SIGINT, SIGTERM handling */
   pamfile             = NULL;
   pamwt               = 20.;
+  threads             = 1;
 
   while ((optc = getopt(argc, argv, OPTIONS)) != -1)
     switch (optc) {
@@ -173,6 +184,7 @@ main(int argc, char **argv)
     case 'P': pamfile       = optarg;               break;
     case 'S': schedulefile  = optarg;               break;
     case 'W': weighted      = TRUE;                 break;
+    case 't': threads       = atoi(optarg);         break;
 
     case 'h': 
       printf("%s\n version %s, %s\n\n%s\n", banner, RELEASE, RELEASEDATE, usage);
@@ -391,6 +403,8 @@ main(int argc, char **argv)
   if (weighted)
     printf("Reweighting each iteration, Sonnhammer rule\n");
 
+  printf("Use %d thread(s) to process\n", threads);
+
   printf(" - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n");
 
 
@@ -410,8 +424,10 @@ main(int argc, char **argv)
 	 "   ------   ",
 	 "   -----    ",
 	 (strategy == ANNEALING) ? "     --     " : "");
-	 
   
+  // omp_set_dynamic(1);
+  omp_set_num_threads(threads); /* set threads for calling openmp */
+
   shmm = AllocSearchHMM(hmm->M);
   iteration_count = 1; 
   while (iteration_count <= maxiter && !killnow)
@@ -429,7 +445,8 @@ main(int argc, char **argv)
 	{
 	  ViterbiAlignAlignment(shmm, fix_aseqs, fix_ainfo.alen, fix_nseqs, &fixtr, &score);
 	  tot_score += score;
-	  for (idx = 0; idx < fix_nseqs; idx++)
+    # pragma omp parallel for
+    for (idx = 0; idx < fix_nseqs; idx++)
 	    {
 	      tr[idx] = fixtr[idx];
 	      DealignTrace(tr[idx], fix_aseqs[idx], fix_ainfo.alen);
@@ -508,6 +525,7 @@ main(int argc, char **argv)
 	    }
 
 				/* forward-backward on the unaligned seqs */
+    # pragma omp parallel for reduction(+: tot_score)
 	  for (idx = fix_nseqs; idx < nseqs; idx++)
 	    {
 	      Forward(hmm, seqs[idx], &fwd, &scl);
@@ -555,7 +573,8 @@ main(int argc, char **argv)
 	{
 	  if ((newhmm = AllocHMM(hmm->M)) == NULL)
 	    Die("Failed to allocate for a new HMM\n");
-	  for (idx = 0; idx < nseqs; idx++)
+
+    for (idx = 0; idx < nseqs; idx++)
 	    TraceCount(newhmm, seqs[idx], wt[idx], tr[idx]);
 	  
 	  /* If we're doing structural priors, we still need a new
@@ -758,6 +777,10 @@ main(int argc, char **argv)
  /************************************************** 
   * Successful return to invocation environment
   **************************************************/
+# if PERFDEBUG
+  ProfilerStop();
+# endif
+
   return (0); 
 }
 

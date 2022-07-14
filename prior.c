@@ -515,7 +515,8 @@ PriorifyTransitionVectors(float *tm, float *ti, float *td, struct prior_s *prior
  * 
  * Args:     hmm     - the HMM to convert. Contains structural annotation.
  *           prior   - a prior structure, containing regularization info
- *                    
+ *
+ * Modified: Use openmp library to speed up this process
  * Return:   1 on success, 0 on failure.                   
  */
 void
@@ -525,17 +526,19 @@ PriorifyHMM(struct hmm_struc *hmm, struct prior_s  *prior)
   
   /* k = 0 BEGIN is special case, no delete state
    */
-  if (prior->strategy == PRI_STRUCT) 
-    StructurePerceptron(prior, hmm->xray);
+
   PriorifyTransitionVectors(hmm->mat[0].t, hmm->ins[0].t, NULL, prior);
   PriorifyInsertVector(hmm->ins[0].p, prior);
 
   /* remainder of model is straightforward
    */
+  if (prior -> strategy == PRI_STRUCT)
+  {
+    for(k = 0; k <= hmm -> M; ++ k)
+      StructurePerceptron(prior, hmm -> xray + k * NINPUTS);
+  }
   for (k = 1; k <= hmm->M ; k++)
     {
-      if (prior->strategy == PRI_STRUCT) 
-	StructurePerceptron(prior, hmm->xray + k*NINPUTS);
       PriorifyTransitionVectors(hmm->mat[k].t, hmm->ins[k].t, hmm->del[k].t, prior);
       PriorifyMatchVector(hmm->mat[k].p, prior);
       PriorifyInsertVector(hmm->ins[k].p, prior);
@@ -589,6 +592,7 @@ StructurePerceptron(struct prior_s *prior, float *xray)
  * 
  * Purpose:  Calculate structural inputs, given an alignment.
  * 
+ * Modified: Use openmp library to speed up this process
  * Return:   void
  *           ret_inputs is malloced here. free(inputs). 
  */
@@ -624,6 +628,8 @@ AnnotateAlignment(char **aseq, int nseq, AINFO *ainfo, float **ret_inputs)
 
 				/* fraction in secondary structure */
       efrac = hfrac = denom = 0.0;
+
+      # pragma omp parallel for reduction(+: denom) reduction(+: efrac) reduction(+: hfrac)
       for (idx = 0; idx < nseq; idx++)
 	if (ainfo->sqinfo[idx].flags & SQINFO_SS)
 	  {
@@ -639,6 +645,8 @@ AnnotateAlignment(char **aseq, int nseq, AINFO *ainfo, float **ret_inputs)
 
 				/* surface accessibility */
       efrac = denom = 0.0;
+
+      # pragma omp parallel for reduction(+: denom) reduction(+: efrac)
       for (idx = 0; idx < nseq; idx++)
 	if (ainfo->sqinfo[idx].flags & SQINFO_SA)
 	  {

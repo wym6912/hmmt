@@ -323,7 +323,8 @@ CountSymbol(char   sym,		/* observed symbol                        */
  *           
  * Args:     newhmm  - new HMM, probability form
  *           oldhmm  - old HMM, probability form
- *           
+ * 
+ * Modified: Use openmp library to speed up this process
  * Return:   distance.
  */
 float
@@ -331,7 +332,8 @@ HMMDistance(struct hmm_struc *newhmm, struct hmm_struc *oldhmm)
 {
   int    k,x, ts;
   float  distance = 0.0;
-
+  
+  # pragma omp parallel for reduction(+: distance)
   for (k = 0; k <= newhmm->M; k++)
     {
 				/* state transition distances */
@@ -352,6 +354,7 @@ HMMDistance(struct hmm_struc *newhmm, struct hmm_struc *oldhmm)
       for (x = 0; x < Alphabet_size; x++)
 	  distance += SQR( 100. * (newhmm->ins[k].p[x] - oldhmm->ins[k].p[x]));
     }
+  
   distance = sqrt(distance) / newhmm->M;
   return distance;
 }
@@ -394,6 +397,7 @@ VerifyHMM(struct hmm_struc *hmm)
  * Normalize all P distributions so they sum to 1.
  * P distributions that are all 0, or contain negative
  * probabilities, are left untouched.
+ * Modified use openmp to speed up the function
  * 
  * Returns 1 on success, or 0 on failure.
  */
@@ -401,7 +405,7 @@ void
 Renormalize(struct hmm_struc *hmm)
 {
   int    k;			/* counter for states                  */
-
+  
   for (k = 0; k <= hmm->M ; k++)
     {
 				/* match state transition frequencies */

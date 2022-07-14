@@ -38,7 +38,7 @@ CC = gcc
 
 ## any special compiler flags you want
 ##
-CFLAGS = -O3 -g -Wall
+CFLAGS = -O3 -g -Wall -fopenmp
 #CFLAGS = -O -uniproc -w   # Alliant FX/2800
 
 ## how to install the man pages 
@@ -55,7 +55,8 @@ MANSUFFIX = 1
 ## You should not need to modify below this line.
 #######
 SHELL  = /bin/sh
-LIBS   = -lm 
+LIBS   = -lm
+# -ltcmalloc -lprofiler -lunwind
 
 MANS  = hmmt
 
